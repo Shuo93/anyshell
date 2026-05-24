@@ -20,6 +20,7 @@ from .providers.base import ShellType
 from .state.cwd_state import AbortContext, EngineState
 from .tool.bash_tool import BashProgress, BashTool, RunResult
 from .tool.command_semantics import interpret_command_result
+from .tool.tool_result import ToolResultBlock, build_tool_result
 
 __all__ = [
     "exec",
@@ -36,6 +37,8 @@ __all__ = [
     "BashTool",
     "BashProgress",
     "RunResult",
+    "ToolResultBlock",
+    "build_tool_result",
     "interpret_command_result",
     "get_task_output",
     "get_task_output_delta",

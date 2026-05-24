@@ -23,6 +23,7 @@ from ..output.task_output import TaskOutput
 from ..state.cwd_state import AbortContext, EngineState
 from .command_semantics import interpret_command_result
 from .output_limits import DEFAULT_TIMEOUT_MS, MAX_TIMEOUT_MS
+from .tool_result import ToolResultBlock, build_tool_result
 
 PROGRESS_THRESHOLD_MS = 2_000
 MAX_PERSISTED_SIZE = 64 * 1024 * 1024  # 64 MB
@@ -48,6 +49,13 @@ class RunResult:
     return_code_interpretation: str | None = None
     persisted_output_path: str | None = None
     persisted_output_size: int | None = None
+    # LLM-facing tool_result fields (see tool_result.build_tool_result).
+    content: str = ""
+    is_error: bool = False
+
+    def to_tool_result_block(self, tool_use_id: str | None = None) -> ToolResultBlock:
+        """The Anthropic tool_result block to send back to the model."""
+        return ToolResultBlock(content=self.content, is_error=self.is_error, tool_use_id=tool_use_id)
 
 
 def _is_autobackgrounding_allowed(command: str) -> bool:
@@ -127,8 +135,9 @@ class BashTool:
         # Explicit background request — return immediately.
         if run_in_background and not self._disable_background_tasks:
             tid = await _mint_task_id()
+            output_path = sc.task_output.path
             sc.background(tid)
-            return _background_run_result(tid)
+            return _background_run_result(tid, output_path=output_path)
 
         # Timeout-driven auto-background hook.
         if should_auto_bg:
@@ -150,12 +159,12 @@ class BashTool:
                 asyncio.shield(sc.result), timeout=self._progress_threshold_ms / 1000
             )
             sc.cleanup()
-            return await self._build_run_result(command, result, sc)
+            return await self._build_run_result(command, result, sc, abort_ctx)
         except asyncio.TimeoutError:
             pass
 
         if background_shell_id:
-            return _background_run_result(background_shell_id, assistant_auto=True)
+            return _background_run_result(background_shell_id, output_path=sc.task_output.path)
 
         # Phase 2: progress loop driven by the shared poller.
         TaskOutput.start_polling(sc.task_output.task_id)
@@ -182,12 +191,12 @@ class BashTool:
                             fixed.output_file_size = to.output_file_size
                             fixed.output_task_id = to.task_id
                         sc.cleanup()
-                        return await self._build_run_result(command, fixed, sc)
+                        return await self._build_run_result(command, fixed, sc, abort_ctx)
                     sc.cleanup()
-                    return await self._build_run_result(command, result, sc)
+                    return await self._build_run_result(command, result, sc, abort_ctx)
 
                 if background_shell_id:
-                    return _background_run_result(background_shell_id, assistant_auto=True)
+                    return _background_run_result(background_shell_id, output_path=sc.task_output.path)
 
                 elapsed = loop.time() - start
                 if on_progress:
@@ -206,7 +215,7 @@ class BashTool:
             TaskOutput.stop_polling(sc.task_output.task_id)
 
     async def _build_run_result(
-        self, command: str, result: ExecResult, sc: ShellCommand
+        self, command: str, result: ExecResult, sc: ShellCommand, abort_ctx: AbortContext
     ) -> RunResult:
         interp = interpret_command_result(command, result.code, result.stdout, result.stderr)
         persisted_path: str | None = None
@@ -220,15 +229,51 @@ class BashTool:
                 persisted_path = result.output_file_path
             except OSError:
                 pass
+
+        # An interrupt-abort takes the data path (is_error=interrupted), not the
+        # semantic-error path — mirrors `!isInterrupt` in BashTool.call().
+        is_interrupt = result.interrupted and abort_ctx.reason == "interrupt"
+        content, is_error = build_tool_result(
+            stdout=result.stdout,
+            code=result.code,
+            interrupted=result.interrupted,
+            is_interrupt=is_interrupt,
+            interpretation_is_error=interp["is_error"],
+            background_task_id=result.background_task_id,
+            backgrounded_by_user=bool(result.backgrounded_by_user),
+            assistant_auto_backgrounded=bool(result.assistant_auto_backgrounded),
+            background_output_path=(sc.task_output.path if result.background_task_id else ""),
+            persisted_output_path=persisted_path,
+            persisted_output_size=persisted_size,
+        )
         return RunResult(
             exec_result=result,
             return_code_interpretation=interp["message"],
             persisted_output_path=persisted_path,
             persisted_output_size=persisted_size,
+            content=content,
+            is_error=is_error,
         )
 
 
-def _background_run_result(task_id: str, assistant_auto: bool = False) -> RunResult:
+def _background_run_result(
+    task_id: str,
+    *,
+    output_path: str,
+    backgrounded_by_user: bool = False,
+    assistant_auto: bool = False,
+) -> RunResult:
+    content, is_error = build_tool_result(
+        stdout="",
+        code=0,
+        interrupted=False,
+        is_interrupt=False,
+        interpretation_is_error=False,
+        background_task_id=task_id,
+        backgrounded_by_user=backgrounded_by_user,
+        assistant_auto_backgrounded=assistant_auto,
+        background_output_path=output_path,
+    )
     return RunResult(
         exec_result=ExecResult(
             stdout="",
@@ -236,6 +281,9 @@ def _background_run_result(task_id: str, assistant_auto: bool = False) -> RunRes
             code=0,
             interrupted=False,
             background_task_id=task_id,
+            backgrounded_by_user=backgrounded_by_user or None,
             assistant_auto_backgrounded=assistant_auto or None,
-        )
+        ),
+        content=content,
+        is_error=is_error,
     )

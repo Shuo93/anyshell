@@ -54,7 +54,14 @@ async def main():
     # 8. grep semantics (exit 1 = no match, not error)
     rr = await tool.run("echo hi | grep nomatch", cb.AbortContext())
     assert rr.exec_result.code == 1 and rr.return_code_interpretation == "No matches found"
-    print("8 grep semantics:", rr.return_code_interpretation)
+    assert rr.is_error is False  # grep exit 1 is not an error
+    print("8 grep semantics:", rr.return_code_interpretation, "| is_error:", rr.is_error)
+
+    # 9. LLM-facing tool_result block (content + is_error)
+    rr = await tool.run("ls /definitely-not-here", cb.AbortContext())
+    block = rr.to_tool_result_block("toolu_demo").to_dict()
+    assert block["is_error"] is True and block["content"].startswith("Exit code")
+    print("9 tool_result block:", block)
 
     print("\nALL SMOKE CHECKS PASSED")
 

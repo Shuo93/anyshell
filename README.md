@@ -26,6 +26,30 @@ are intentionally **out of scope** — this is just the execution engine.
 
 In development. See `tests/` for the mock-based scenario matrix.
 
+## LLM-facing output (tool_result)
+
+`BashTool.run()` returns a `RunResult` carrying the rich `ExecResult` plus the
+exact `tool_result` block Claude Code sends to the model — a single-string
+`content` and an `is_error` flag — aligned with `BashTool.tsx`:
+
+```python
+rr = await tool.run("ls /nope", abort_ctx)
+rr.content          # e.g. "Exit code 2\nls: /nope: No such file or directory"
+rr.is_error         # True on a semantic failure; False for grep-exit-1, etc.
+rr.to_tool_result_block("toolu_123").to_dict()
+#   {"type": "tool_result", "tool_use_id": "toolu_123",
+#    "content": "...", "is_error": True}
+```
+
+Faithful details: success output is leading-blank-stripped + right-trimmed and
+wrapped in `<persisted-output>` when large; semantic errors are prefixed with
+`Exit code N` (grep=1/diff=1/etc. are *not* errors); an interrupt-abort takes
+the data path with the `<error>Command was aborted before completion</error>`
+marker; background runs return a "running in background with ID …" message. As
+in Claude Code, the synthetic "Command timed out after …" text stays on
+`ExecResult.stderr` (for raw `exec()` users) and is **not** folded into the
+model-facing content — a timeout simply shows `Exit code 143`.
+
 ## Layout
 
 ```
