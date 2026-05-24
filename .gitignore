@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Project-specific (not covered by the template above)
+.DS_Store
+uv.lock

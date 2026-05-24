@@ -1,0 +1,313 @@
+[
+  {
+    "fn": "quote",
+    "arg": [
+      "rg foo | wc -l",
+      "<",
+      "/dev/null"
+    ],
+    "result": "'rg foo | wc -l' \\< /dev/null"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "echo hello",
+      "<",
+      "/dev/null"
+    ],
+    "result": "'echo hello' \\< /dev/null"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "ls -la"
+    ],
+    "result": "'ls -la'"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "a b c"
+    ],
+    "result": "'a b c'"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "it's"
+    ],
+    "result": "\"it's\""
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "select(.x != .y)"
+    ],
+    "result": "'select(.x != .y)'"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "has'quote and space"
+    ],
+    "result": "\"has'quote and space\""
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "/dev/null"
+    ],
+    "result": "/dev/null"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "<"
+    ],
+    "result": "\\<"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "2>&1"
+    ],
+    "result": "2\\>\\&1"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "a\"b"
+    ],
+    "result": "'a\"b'"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "foo$bar`baz`"
+    ],
+    "result": "foo\\$bar\\`baz\\`"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "plain"
+    ],
+    "result": "plain"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      "with;semi"
+    ],
+    "result": "with\\;semi"
+  },
+  {
+    "fn": "quote",
+    "arg": [
+      ""
+    ],
+    "result": ""
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "rg foo | wc -l"
+    ],
+    "result": [
+      "rg",
+      "foo",
+      {
+        "op": "|"
+      },
+      "wc",
+      "-l"
+    ]
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "cat a.txt | grep x | wc -l"
+    ],
+    "result": [
+      "cat",
+      "a.txt",
+      {
+        "op": "|"
+      },
+      "grep",
+      "x",
+      {
+        "op": "|"
+      },
+      "wc",
+      "-l"
+    ]
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "FOO=bar baz | qux"
+    ],
+    "result": [
+      "FOO=bar",
+      "baz",
+      {
+        "op": "|"
+      },
+      "qux"
+    ]
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "ls *.py | head"
+    ],
+    "result": [
+      "ls",
+      {
+        "op": "glob",
+        "pattern": "*.py"
+      },
+      {
+        "op": "|"
+      },
+      "head"
+    ]
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "echo a 2>&1 | tee log"
+    ],
+    "result": [
+      "echo",
+      "a",
+      "2",
+      {
+        "op": ">&"
+      },
+      "1",
+      {
+        "op": "|"
+      },
+      "tee",
+      "log"
+    ]
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "echo a 2>/dev/null | cat"
+    ],
+    "result": [
+      "echo",
+      "a",
+      "2",
+      {
+        "op": ">"
+      },
+      "/dev/null",
+      {
+        "op": "|"
+      },
+      "cat"
+    ]
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "a && b || c ; d"
+    ],
+    "result": [
+      "a",
+      {
+        "op": "&&"
+      },
+      "b",
+      {
+        "op": "||"
+      },
+      "c",
+      {
+        "op": ";"
+      },
+      "d"
+    ]
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "echo 'single quoted' | cat"
+    ],
+    "result": [
+      "echo",
+      "single quoted",
+      {
+        "op": "|"
+      },
+      "cat"
+    ]
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "echo \"double quoted\" | cat"
+    ],
+    "result": [
+      "echo",
+      "double quoted",
+      {
+        "op": "|"
+      },
+      "cat"
+    ]
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "grep -E 'a|b' file | sort"
+    ],
+    "result": [
+      "grep",
+      "-E",
+      "a|b",
+      "file",
+      {
+        "op": "|"
+      },
+      "sort"
+    ]
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "find . -name '*.ts' | xargs wc -l"
+    ],
+    "result": [
+      "find",
+      ".",
+      "-name",
+      "*.ts",
+      {
+        "op": "|"
+      },
+      "xargs",
+      "wc",
+      "-l"
+    ]
+  },
+  {
+    "fn": "parse",
+    "arg": [
+      "echo {a,b} | cat"
+    ],
+    "result": [
+      "echo",
+      "{a,b}",
+      {
+        "op": "|"
+      },
+      "cat"
+    ]
+  }
+]
